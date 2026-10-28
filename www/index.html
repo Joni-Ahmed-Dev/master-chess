@@ -24,7 +24,7 @@ button.alt{background:var(--card);color:var(--fg);border:1px solid var(--ln)}
 .pl .cp{font-size:17px;font-weight:400;letter-spacing:-3px;flex:1;white-space:nowrap;overflow:hidden}
 .pl small{opacity:.7;font-weight:600}
 #wrapb{position:relative}
-#board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));width:100%;aspect-ratio:1/1;border-radius:6px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#board,#rb{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));width:100%;aspect-ratio:1/1;border-radius:6px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .sq{position:relative;min-width:0;min-height:0;cursor:pointer}
 .l{background:var(--lt)}.d{background:var(--dk)}
 .sq.last{background:var(--last)}.sq.sel{background:var(--sel)}
@@ -48,6 +48,15 @@ button.alt{background:var(--card);color:var(--fg);border:1px solid var(--ln)}
 .ov .row{display:flex}
 .ov .row button{background:#fff;color:#111;font-size:34px;padding:6px 12px}
 .ov h2{margin:0 0 10px;font-size:22px}
+#scan{position:fixed;inset:0;background:var(--bg);z-index:50;overflow:auto;display:none;padding-top:env(safe-area-inset-top,0px)}
+#scan .card{text-align:left}
+#scan p{margin:10px 0 4px;font-size:14px;font-weight:600}
+.fbtn{display:inline-block;background:var(--ac);color:#fff;border-radius:10px;padding:11px 16px;margin:10px 0 4px;cursor:pointer}
+#smsg{font-size:13px;min-height:18px;margin:6px 0;color:var(--ac);font-weight:600}
+#prev{width:100%;display:none;border-radius:6px;margin:6px 0}
+#rb{display:none;margin:10px 0}
+#scan input[type=password]{width:100%;padding:10px;border-radius:8px;border:1px solid var(--ln);background:var(--bg);color:var(--fg);font:inherit}
+.hint{font-size:12px;opacity:.7;margin:4px 0}
 </style>
 </head>
 <body>
@@ -63,6 +72,7 @@ button.alt{background:var(--card);color:var(--fg);border:1px solid var(--ln)}
 <p style="margin-top:16px">আপনি কোন রং নিয়ে খেলবেন?</p>
 <button onclick="start('w')">⚪ সাদা</button>
 <button onclick="start('b')">⚫ কালো</button>
+<div style="margin-top:10px"><button class="alt" onclick="openScan()">📷 ছবি স্ক্যান</button></div>
 </div>
 <div id="game">
 <div class="pl" id="top"></div>
@@ -76,23 +86,45 @@ button.alt{background:var(--card);color:var(--fg);border:1px solid var(--ln)}
 <div class="bar">
 <button class="alt" onclick="undo()">↶ পূর্বাবস্থা</button>
 <button class="alt" onclick="flip()">⇅ বোর্ড ঘোরান</button>
+<button class="alt" onclick="openScan()">📷 ছবি স্ক্যান</button>
 <button class="alt" onclick="newGame()">নতুন খেলা</button>
 </div>
 </div>
 </div>
+<div id="scan"><div class="wrap">
+<h1>📷 ছবি স্ক্যান</h1>
+<div class="card">
+<p>পদ্ধতি</p>
+<div class="chips" data-g="mode"><button data-v="cal" class="on">ক্যালিব্রেশন</button><button data-v="ai">AI ভিশন</button></div>
+<p>ছবিতে কোন রং নিচে?</p>
+<div class="chips" data-g="orient"><button data-v="w" class="on">সাদা নিচে</button><button data-v="b">কালো নিচে</button></div>
+<p>চাল কার? (বট এই পক্ষে খেলবে)</p>
+<div class="chips" data-g="turn"><button data-v="w" class="on">সাদার চাল</button><button data-v="b">কালোর চাল</button></div>
+<label class="fbtn">🖼️ গ্যালারি থেকে ছবি<input id="file" type="file" accept="image/*" hidden></label>
+<div id="smsg"></div>
+<canvas id="prev"></canvas>
+<div id="calbox"><div class="hint">প্রথমবার: অ্যাপের শুরুর পজিশনের (৩২টি গুটি আগের জায়গায়) একটি স্ক্রিনশট বেছে বোর্ডের ওপর-বাম ও নিচ-ডান কোণ ট্যাপ করুন, তারপর শেখান। এরপর একই অ্যাপের যেকোনো ছবি স্ক্যান হবে।</div><button onclick="train()">🎓 শুরুর পজিশন শেখান</button></div>
+<div id="aibox" style="display:none"><div class="hint">AI ভিশনের জন্য Anthropic API key ও ইন্টারনেট লাগবে। কোণ ট্যাপ না করলে পুরো ছবি পড়া হবে।</div><input id="key" type="password" placeholder="sk-ant-..."></div>
+<div style="margin-top:8px"><button onclick="doScan()">🔍 স্ক্যান করুন</button></div>
+<div id="rhint" class="hint" style="display:none">ভুল গুটি থাকলে ঘরে ট্যাপ করে বদলান।</div>
+<div id="rb"></div>
+<button id="playbtn" style="display:none" onclick="playScan()">▶ এই পজিশনে খেলুন</button>
+<button class="alt" onclick="closeScan()">বন্ধ করুন</button>
+</div></div></div>
 <script>
 const g=new Chess();
-let me='w',view='w',sel=null,tg=[],last=null,busy=false,pend=null,LV=1,tok=0;
+let me='w',view='w',sel=null,tg=[],last=null,busy=false,pend=null,LV=1,tok=0,ff=false;
 const G={p:'♟\uFE0E',n:'♞\uFE0E',b:'♝\uFE0E',r:'♜\uFE0E',q:'♛\uFE0E',k:'♚\uFE0E'};
 const V={p:100,n:320,b:335,r:500,q:900,k:0};
 const CFG=[{t:1500},{t:4500},{t:9000}];
 const $=id=>document.getElementById(id);
 function lvl(b){LV=+b.dataset.l;document.querySelectorAll('#lv button').forEach(x=>x.classList.toggle('on',x===b));}
 function beep(){try{const a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),k=a.createGain();o.type='triangle';o.frequency.value=260;k.gain.setValueAtTime(.15,a.currentTime);k.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(k);k.connect(a.destination);o.start();o.stop(a.currentTime+.1);}catch(e){}}
-function start(c){tok++;$('info').textContent='';me=c;view=c;$('pick').style.display='none';$('game').style.display='block';g.reset();sel=null;tg=[];last=null;busy=false;render();if(me==='b')bot();}
+function start(c){tok++;startFen=null;$('info').textContent='';me=c;view=c;$('pick').style.display='none';$('game').style.display='block';g.reset();sel=null;tg=[];last=null;busy=false;ff=true;render();}
+function botNone(){return !startFen&&!g.history({verbose:true}).some(m=>m.color!==me);}
 function newGame(){busy=false;tok++;$('game').style.display='none';$('pick').style.display='block';$('end').style.display='none';}
 function flip(){view=view==='w'?'b':'w';render();}
-function undo(){if(busy||!g.history().length)return;g.undo();if(g.turn()!==me&&g.history().length)g.undo();const h=g.history({verbose:true});last=h.length?h[h.length-1]:null;sel=null;tg=[];render();if(g.turn()!==me&&!g.game_over())bot();}
+function undo(){if(busy||!g.history().length)return;g.undo();ff=botNone();if(!ff&&g.turn()!==me&&g.history().length){g.undo();ff=botNone();}const h=g.history({verbose:true});last=h.length?h[h.length-1]:null;sel=null;tg=[];render();if(!ff&&g.turn()!==me&&!g.game_over())bot();}
 
 function render(an){
   const b=g.board(),sg=view==='b'?-1:1;let h='',ks=-1;
@@ -128,29 +160,102 @@ function render(an){
   if(g.in_checkmate()){over=true;et=g.turn()===me?'চেকমেট! বট জিতেছে 🤖':'চেকমেট! আপনি জিতেছেন 🏆';s=et;}
   else if(g.game_over()){over=true;et='ড্র 🤝';s=et;}
   else if(busy)s='বট ভাবছে…';
+  else if(ff&&g.turn()!==me)s='বটের প্রথম চালটা আপনি দিন (এরপর বট নিজে খেলবে)';
   else s=(g.in_check()?'চেক! ':'')+'আপনার চাল';
   $('status').textContent=s;
   $('end').style.display=over?'flex':'none';$('et').textContent=et;
 }
 
 function clk(n){
-  if(busy||g.game_over()||g.turn()!==me)return;
+  const mc=ff?g.turn():me;if(busy||g.game_over()||g.turn()!==mc)return;
   if(sel&&tg.includes(n)){
     const m=g.moves({square:sel,verbose:true}).filter(x=>x.to===n);
     if(m.length&&m[0].promotion){pend={from:sel,to:n};
-      $('pr').innerHTML=['q','r','b','n'].map(t=>`<button onclick="prom('${t}')"><span style="color:${me==='w'?'#fff':'#111'};${me==='w'?'text-shadow:0 0 2px #000,0 0 2px #000':''}">${G[t]}</span></button>`).join('');
+      $('pr').innerHTML=['q','r','b','n'].map(t=>`<button onclick="prom('${t}')"><span style="color:${g.turn()==='w'?'#fff':'#111'};${g.turn()==='w'?'text-shadow:0 0 2px #000,0 0 2px #000':''}">${G[t]}</span></button>`).join('');
       $('promo').style.display='flex';return;}
     doMove(sel,n);return;
   }
   const p=g.get(n);
-  if(p&&p.color===me){sel=n;tg=g.moves({square:n,verbose:true}).map(m=>m.to);}else{sel=null;tg=[];}
+  if(p&&p.color===mc){sel=n;tg=g.moves({square:n,verbose:true}).map(m=>m.to);}else{sel=null;tg=[];}
   render();
 }
 function prom(t){$('promo').style.display='none';doMove(pend.from,pend.to,t);}
 function doMove(f,t,p){
-  last=g.move({from:f,to:t,promotion:p||'q'});sel=null;tg=[];beep();render(true);
-  if(!g.game_over())setTimeout(bot,250);
+  const mv=g.turn();last=g.move({from:f,to:t,promotion:p||'q'});sel=null;tg=[];beep();render(true);
+  if(ff&&mv!==me)ff=false;if(!g.game_over()&&!ff&&g.turn()!==me)setTimeout(bot,250);
 }
+
+/* ---------- Photo scan ---------- */
+let startFen=null;
+const SC={img:null,rect:null,pts:[],mode:'cal',orient:'w',turn:'w',rows:null,tpl:null,rf:null};
+try{SC.tpl=JSON.parse(localStorage.getItem('mc_tpl')||'null');SC.rf=JSON.parse(localStorage.getItem('mc_rf')||'null');$('key').value=localStorage.getItem('mc_key')||'';}catch(e){}
+const NN=20;
+function msg(t){$('smsg').textContent=t;$('smsg').scrollIntoView({block:'nearest'});}
+function openScan(){$('scan').style.display='block';updScan();}
+function closeScan(){$('scan').style.display='none';}
+function updScan(){$('calbox').style.display=SC.mode==='cal'?'block':'none';$('aibox').style.display=SC.mode==='ai'?'block':'none';}
+document.querySelectorAll('#scan .chips').forEach(gp=>gp.onclick=e=>{const b=e.target.closest('button');if(!b)return;gp.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));SC[gp.dataset.g]=b.dataset.v;updScan();});
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();
+  im.onload=()=>{SC.img=im;SC.pts=[];SC.rect=SC.rf;drawPrev();msg(SC.rf?'আগের বোর্ড-ফ্রেম ব্যবহার হচ্ছে। ঠিক না হলে নতুন করে ওপর-বাম কোণ ট্যাপ করুন।':'বোর্ডের ওপর-বাম কোণ ট্যাপ করুন');};
+  im.src=URL.createObjectURL(f);e.target.value='';};
+function drawPrev(){const cv=$('prev'),im=SC.img;cv.style.display='block';cv.width=Math.min(im.naturalWidth,900);cv.height=cv.width*im.naturalHeight/im.naturalWidth;
+  const x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);const R=SC.rect;
+  if(R){const X=R.x*cv.width,Y=R.y*cv.height,W=R.w*cv.width,H=R.h*cv.height;x.strokeStyle='#ff3b30';x.lineWidth=Math.max(2,cv.width/200);x.strokeRect(X,Y,W,H);
+    x.globalAlpha=.5;x.lineWidth=1;for(let i=1;i<8;i++){x.beginPath();x.moveTo(X+W*i/8,Y);x.lineTo(X+W*i/8,Y+H);x.moveTo(X,Y+H*i/8);x.lineTo(X+W,Y+H*i/8);x.stroke();}x.globalAlpha=1;}}
+$('prev').onclick=e=>{const r=e.target.getBoundingClientRect(),fx=(e.clientX-r.left)/r.width,fy=(e.clientY-r.top)/r.height;
+  if(SC.pts.length>=2)SC.pts=[];SC.pts.push([fx,fy]);
+  if(SC.pts.length===1){SC.rect=null;drawPrev();msg('এবার বোর্ডের নিচ-ডান কোণ ট্যাপ করুন');}
+  else{const[a,b]=SC.pts;SC.rect={x:Math.min(a[0],b[0]),y:Math.min(a[1],b[1]),w:Math.abs(a[0]-b[0]),h:Math.abs(a[1]-b[1])};drawPrev();msg('ফ্রেম ঠিক থাকলে স্ক্যান/শেখান চাপুন (সাদা গ্রিড ৮×৮ ঘরের সাথে মিলতে হবে)');}};
+function feats(){const im=SC.img,R=SC.rect,W=im.naturalWidth,H=im.naturalHeight,cv=document.createElement('canvas');cv.width=cv.height=NN;
+  const cx=cv.getContext('2d',{willReadFrequently:true});cx.imageSmoothingQuality='high';const out=[],cw=R.w*W/8,ch=R.h*H/8,x0=R.x*W,y0=R.y*H,m=.04;
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){cx.clearRect(0,0,NN,NN);cx.drawImage(im,x0+(c+m)*cw,y0+(r+m)*ch,cw*(1-2*m),ch*(1-2*m),0,0,NN,NN);
+    const d=cx.getImageData(0,0,NN,NN).data,l=new Float32Array(NN*NN);for(let i=0;i<NN*NN;i++)l[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
+    const ring=[];for(let i=0;i<NN;i++)ring.push(l[i],l[(NN-1)*NN+i],l[i*NN],l[i*NN+NN-1]);ring.sort((a,b)=>a-b);const bg=ring[ring.length>>1];
+    for(let i=0;i<NN*NN;i++)l[i]-=bg;out.push(l);}
+  return out;}
+function unit(v){let s=0;for(let i=0;i<v.length;i++)s+=v[i]*v[i];s=Math.sqrt(s)||1;return Array.from(v,x=>Math.round(x/s*1000)/1000);}
+function lg(r,c){return SC.orient==='w'?[r,c]:[7-r,7-c];}
+function saveRF(){try{if(SC.rect){SC.rf=SC.rect;localStorage.setItem('mc_rf',JSON.stringify(SC.rf));}}catch(e){}}
+function train(){if(!SC.img||!SC.rect)return msg('আগে ছবি বেছে বোর্ডের দুই কোণ ট্যাপ করুন');
+  const f=feats(),ord='rnbqkbnr',tpl=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const[lr,lc]=lg(r,c);let ch=null;
+    if(lr===0)ch=ord[lc];else if(lr===1)ch='p';else if(lr===6)ch='P';else if(lr===7)ch=ord[lc].toUpperCase();
+    if(ch)tpl.push({p:ch,v:unit(f[r*8+c])});}
+  SC.tpl=tpl;saveRF();try{localStorage.setItem('mc_tpl',JSON.stringify(tpl));}catch(e){}
+  msg('শেখা হয়েছে ✔ ('+tpl.length+'টি গুটি)। এখন যেকোনো ছবি বেছে স্ক্যান করুন।');}
+function classify(v){let e=0;for(let i=0;i<v.length;i++)e+=Math.abs(v[i]);e/=v.length;if(e<5)return '.';
+  const u=unit(v);let best=-2,bp='.';for(const t of SC.tpl){let s=0;const tv=t.v;for(let i=0;i<u.length;i++)s+=u[i]*tv[i];if(s>best){best=s;bp=t.p;}}return bp;}
+function scanCal(){if(!SC.tpl)throw new Error('আগে ক্যালিব্রেশন করে শুরুর পজিশন শেখান');if(!SC.rect)throw new Error('বোর্ডের দুই কোণ ট্যাপ করুন');
+  const f=feats(),rows=Array.from({length:8},()=>Array(8).fill('.'));
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const[lr,lc]=lg(r,c);rows[lr][lc]=classify(f[r*8+c]);}return rows;}
+async function scanAI(){const key=$('key').value.trim();if(!key)throw new Error('API key দিন');try{localStorage.setItem('mc_key',key);}catch(e){}
+  const im=SC.img,R=SC.rect||{x:0,y:0,w:1,h:1},W=im.naturalWidth,H=im.naturalHeight,sw=R.w*W,sh=R.h*H,k=Math.min(1,1000/Math.max(sw,sh)),cv=document.createElement('canvas');
+  cv.width=Math.round(sw*k);cv.height=Math.round(sh*k);cv.getContext('2d').drawImage(im,R.x*W,R.y*H,sw,sh,0,0,cv.width,cv.height);
+  const data=cv.toDataURL('image/jpeg',.9).split(',')[1];
+  const q='This is a chess board image. Read every square exactly as displayed: first row = top row of the image, columns left to right, regardless of whose side is at the bottom. Verify each piece colour and type carefully. Reply with ONLY JSON: {"rows":["8 chars","8 chars",...8 strings]} using K Q R B N P for white pieces, k q r b n p for black pieces and . for empty squares.';
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:600,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data}},{type:'text',text:q}]}]})});
+  const j=await res.json();if(!res.ok)throw new Error((j.error&&j.error.message)||'API ত্রুটি');
+  const t=j.content.map(x=>x.text||'').join(''),m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error('উত্তর পড়া যায়নি');
+  const a=JSON.parse(m[0]).rows;if(!a||a.length!==8||a.some(s=>s.length!==8))throw new Error('AI ৮×৮ বোর্ড দেয়নি, আবার চেষ্টা করুন');
+  const rows=Array.from({length:8},()=>Array(8).fill('.'));
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const[lr,lc]=lg(r,c);rows[lr][lc]=a[r][c];}return rows;}
+async function doScan(){if(!SC.img)return msg('আগে গ্যালারি থেকে ছবি বেছে নিন');
+  try{msg('স্ক্যান হচ্ছে…');SC.rows=SC.mode==='cal'?scanCal():await scanAI();saveRF();showRes();msg('স্ক্যান শেষ। ভুল থাকলে ঘরে ট্যাপ করে ঠিক করুন, তারপর "খেলুন" চাপুন।');}
+  catch(e){msg('ত্রুটি: '+e.message);}}
+function showRes(){let h='';for(let r=0;r<8;r++)for(let c=0;c<8;c++){const ch=SC.rows[r][c],w=ch!=='.'&&ch===ch.toUpperCase();
+  h+=`<div class="sq ${(r+c)%2?'d':'l'}" onclick="cyc(${r},${c})">${ch==='.'?'':`<div class="pc ${w?'w':'b'}">${G[ch.toLowerCase()]}</div>`}</div>`;}
+  const rb=$('rb');rb.innerHTML=h;rb.style.display='grid';$('playbtn').style.display='block';$('rhint').style.display='block';}
+function cyc(r,c){const L='.PNBRQKpnbrqk',i=L.indexOf(SC.rows[r][c]);SC.rows[r][c]=L[(i+1)%L.length];showRes();}
+function playScan(){const R=SC.rows;let wk=0,bk=0,bad=false;
+  const pl=R.map((row,ri)=>{let s='',n=0;for(const ch of row){if(ch==='.')n++;else{if(n){s+=n;n=0;}s+=ch;if(ch==='K')wk++;if(ch==='k')bk++;if((ch==='P'||ch==='p')&&(ri===0||ri===7))bad=true;}}if(n)s+=n;return s;}).join('/');
+  if(wk!==1||bk!==1)return msg('প্রতি পক্ষের ঠিক একটি রাজা থাকতে হবে');if(bad)return msg('প্যান প্রথম/শেষ সারিতে থাকতে পারে না');
+  let ca='';if(R[7][4]==='K'){if(R[7][7]==='R')ca+='K';if(R[7][0]==='R')ca+='Q';}if(R[0][4]==='k'){if(R[0][7]==='r')ca+='k';if(R[0][0]==='r')ca+='q';}
+  const fen=`${pl} ${SC.turn} ${ca||'-'} - 0 1`;
+  if(!g.load(fen))return msg('পজিশন বৈধ নয়, গুটি ঠিক করুন');
+  if(g.game_over())return msg('এই পজিশনে খেলা শেষ (চেকমেট/ড্র)');
+  startFen=fen;ff=false;tok++;me=SC.turn==='w'?'b':'w';view=me;sel=null;tg=[];last=null;busy=false;
+  closeScan();$('pick').style.display='none';$('game').style.display='block';$('info').textContent='';render();bot();}
 
 /* ---------- Engine ---------- */
 const Eng=(function(){
@@ -271,7 +376,7 @@ function search(d,a,bt,ply,nul){
 function perft(d){if(!d)return 1;let n=0;for(const m of gen(false)){if(make(m)){n+=perft(d-1);unmake(m);}}return n;}
 function sq(n){return(8-+n[1])*16+'abcdefgh'.indexOf(n[0]);}
 function uci(m){const nm=s=>'abcdefgh'[s&7]+(8-(s>>4));return{from:nm(m&127),to:nm((m>>7)&127),promotion:(m>>14)&7?'  nbrq'[(m>>14)&7]:undefined};}
-function load(moves){setFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+function load(moves,fen){setFen(fen||'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
  for(const x of moves){const f=sq(x.f),t=sq(x.t),pr=x.p?'  nbrq'.indexOf(x.p):0;let ok=false;
   for(const m of gen(false)){if((m&127)===f&&((m>>7)&127)===t&&((m>>14)&7)===pr){ok=make(m);break;}}if(!ok)return false;}return true;}
 function go(ms,cb,maxd,onI,alive){
@@ -304,7 +409,7 @@ function bot(){
       if(!r){const all=g.moves({verbose:true});r=g.move(all[Math.floor(Math.random()*all.length)]);}
       last=r;beep();busy=false;render(true);
     };
-    if(!Eng.load(hs)){fin(null);return;}
+    if(!Eng.load(hs,startFen)){fin(null);return;}
     const botW=g.turn()==='w';
     Eng.go(CFG[LV].t,(m,s,d,n)=>{
       if(my!==tok)return;

@@ -169,14 +169,16 @@ function render(an){
 function clk(n){
   const mc=ff?g.turn():me;if(busy||g.game_over()||g.turn()!==mc)return;
   if(sel&&tg.includes(n)){
-    const m=g.moves({square:sel,verbose:true}).filter(x=>x.to===n);
-    if(m.length&&m[0].promotion){pend={from:sel,to:n};
+    const sp=g.get(sel),tp=g.get(n);let to=n;
+    if(sp&&sp.type==='k'&&tp&&tp.type==='r'&&tp.color===sp.color)to=(n[0]==='h'?'g':'c')+n[1];
+    const m=g.moves({square:sel,verbose:true}).filter(x=>x.to===to);
+    if(m.length&&m[0].promotion){pend={from:sel,to:to};
       $('pr').innerHTML=['q','r','b','n'].map(t=>`<button onclick="prom('${t}')"><span style="color:${g.turn()==='w'?'#fff':'#111'};${g.turn()==='w'?'text-shadow:0 0 2px #000,0 0 2px #000':''}">${G[t]}</span></button>`).join('');
       $('promo').style.display='flex';return;}
-    doMove(sel,n);return;
+    doMove(sel,to);return;
   }
   const p=g.get(n);
-  if(p&&p.color===mc){sel=n;tg=g.moves({square:n,verbose:true}).map(m=>m.to);}else{sel=null;tg=[];}
+  if(p&&p.color===mc){sel=n;tg=g.moves({square:n,verbose:true}).flatMap(m=>m.flags.includes('k')?[m.to,'h'+n[1]]:m.flags.includes('q')?[m.to,'a'+n[1]]:[m.to]);}else{sel=null;tg=[];}
   render();
 }
 function prom(t){$('promo').style.display='none';doMove(pend.from,pend.to,t);}
